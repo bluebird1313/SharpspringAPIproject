@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
-import { Lead } from './types';
+import { Lead, SharpSpringLead } from './types';
 
 dotenv.config();
 
@@ -36,7 +36,7 @@ app.post('/webhook/sharpspring/leads', async (req, res) => {
       return res.status(400).json({ error: 'Invalid webhook payload' });
     }
 
-    const processedLeads: Lead[] = body.leads.map(lead => ({
+    const processedLeads: Lead[] = body.leads.map((lead: any) => ({
       sharpspring_id: lead.id?.toString() || '',
       name: `${lead.firstName || ''} ${lead.lastName || ''}`.trim(),
       email: lead.emailAddress || '',

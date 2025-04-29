@@ -174,21 +174,23 @@ async function sendSlackMessage(payload: any, description: string): Promise<stri
             headers: {
                 'Content-Type': 'application/json',
             },
-            validateStatus: status => status >= 200 && status < 300,
+            validateStatus: (status: any) => status >= 200 && status < 300,
         });
 
         console.log(`Slack message sent successfully. Status: ${response.status}`);
 
         // Extract timestamp if available
         let messageTs: string | null = null;
-        if (typeof response.data === 'object' && response.data !== null && 'ts' in response.data) {
-            messageTs = String(response.data.ts);
+        const responseData = response.data as { ts?: string };
+        if (responseData && responseData.ts) {
+            messageTs = responseData.ts;
         }
         
         return messageTs;
-    } catch (error) {
-        if (axios.isAxiosError(error)) {
-            console.error(`Error sending Slack message: ${error.response?.status}`, error.response?.data);
+    } catch (error: any) {
+        if (error && error.isAxiosError) {
+            const errorResponse = error.response?.data;
+            console.error(`Error sending Slack message: ${error.response?.status}`, errorResponse);
         } else {
             console.error('Generic error sending Slack message:', error);
         }

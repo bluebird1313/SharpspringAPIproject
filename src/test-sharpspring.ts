@@ -89,11 +89,14 @@ async function testSharpSpringConnection() {
       }
     });
     
-    if (response.data.error) {
-      throw new Error(`SharpSpring API Error: ${response.data.error.message} (Code: ${response.data.error.code})`);
+    const responseData = response.data as any;
+    if (responseData && responseData.error) {
+      const errorMessage = responseData.error.message || 'Unknown error';
+      const errorCode = responseData.error.code || 'No code';
+      throw new Error(`SharpSpring API Error: ${errorMessage} (Code: ${errorCode})`);
     }
     
-    return response.data.result;
+    return responseData?.result;
   }
 }
 

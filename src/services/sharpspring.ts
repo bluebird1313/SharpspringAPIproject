@@ -44,21 +44,25 @@ async function makeSharpSpringRequest(method: string, params: any): Promise<any>
                    response.data ? Object.keys(response.data) : 'No response data');
 
         // Check for API-Level Errors first
-        if (response.data.error) {
-            console.error(`[DEBUG] SharpSpring API Error (${requestID}) for method ${method}:`, JSON.stringify(response.data.error));
-            throw new Error(`SharpSpring API Error: ${response.data.error.message} (Code: ${response.data.error.code})`);
+        const responseData = response.data as any;
+        if (responseData && responseData.error) {
+            console.error(`[DEBUG] SharpSpring API Error (${requestID}) for method ${method}:`, JSON.stringify(responseData.error));
+            const errorMessage = responseData.error.message || 'Unknown API error';
+            const errorCode = responseData.error.code || 'No code';
+            throw new Error(`SharpSpring API Error: ${errorMessage} (Code: ${errorCode})`);
         }
 
         // Return the result part for further processing (including object-level errors)
-        return response.data.result;
-    } catch (error) {
-        if (axios.isAxiosError(error)) {
+        return responseData?.result;
+    } catch (error: any) {
+        if (error && error.isAxiosError) {
+            const errorResponse = error.response?.data as any;
             console.error(`[DEBUG] Axios error calling SharpSpring method ${method} (${requestID}):`, 
                          error.message, 
                          error.response?.status, 
-                         error.response?.data);
+                         errorResponse);
             // Provide more context if possible
-            const message = error.response?.data?.error?.message || error.message;
+            const message = errorResponse?.error?.message || error.message;
             throw new Error(`HTTP error calling SharpSpring API: ${message}`);
         } else {
             console.error(`[DEBUG] Generic error calling SharpSpring method ${method} (${requestID}):`, error);

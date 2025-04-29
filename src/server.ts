@@ -46,19 +46,19 @@ app.post('/api/log-interaction', async (req: Request, res: Response) => {
         }
 
         console.log(`Found lead ${lead.email} (ID: ${lead.id}) for interaction logging.`);
-        const originalScore = lead.score;
+        const originalScore = lead.score || 0;
 
         // 2. Summarize interaction with OpenAI (async, but wait for it here)
         const aiSummary = await openaiService.summarizeInteraction(summary);
         console.log(`AI Summary: ${aiSummary || 'Not generated'}`);
 
         // 3. Log the interaction in Supabase
-        const interactionData = {
+        const interactionData: any = {
             lead_id: lead.id,
             type: interactionType,
+            content: summary,
             summary: summary,
-            summary_ai: aiSummary,
-            interaction_time: new Date()
+            summary_ai: aiSummary
         };
         const loggedInteraction = await supabaseService.addInteraction(interactionData);
         if (!loggedInteraction) {
@@ -67,10 +67,10 @@ app.post('/api/log-interaction', async (req: Request, res: Response) => {
         }
 
         // 4. Recalculate score based on interaction
-        const newScore = scoringService.recalculateScoreOnInteraction(lead.score, interactionType, aiSummary);
+        const newScore = scoringService.recalculateScoreOnInteraction(lead.score || 0, interactionType, aiSummary);
 
         // 5. Update lead score in Supabase
-        const updatedLead = await supabaseService.updateLeadScoreAndNotes(lead.id, newScore, null); // Not adding notes here yet
+        const updatedLead = await supabaseService.updateLeadScoreAndNotes(lead.id, newScore || 0, null); // Not adding notes here yet
         if (!updatedLead) {
              console.error("Failed to update lead score in Supabase after interaction.");
              // Consider how to handle this - maybe don't update SharpSpring?
@@ -85,10 +85,12 @@ app.post('/api/log-interaction', async (req: Request, res: Response) => {
         }
 
         // 7. Update lead in SharpSpring (async, don't necessarily wait)
-        const noteForSharpSpring = `Interaction Logged (${interactionType}):\n${summary}\n\n${aiSummary ? 'AI Summary: ' + aiSummary + '\n' : ''}Score updated to: ${newScore}`;
-        sharpSpringService.updateLead(lead.sharpspring_id, newScore, noteForSharpSpring)
-            .then(() => console.log(`Successfully triggered update for SharpSpring lead ${lead.sharpspring_id}`))
-            .catch(err => console.error(`Error triggering update for SharpSpring lead ${lead.sharpspring_id}:`, err));
+        if (lead.sharpspring_id) {
+            const noteForSharpSpring = `Interaction Logged (${interactionType}):\n${summary}\n\n${aiSummary ? 'AI Summary: ' + aiSummary + '\n' : ''}Score updated to: ${newScore}`;
+            sharpSpringService.updateLead(Number(lead.sharpspring_id), newScore, noteForSharpSpring)
+                .then(() => console.log(`Successfully triggered update for SharpSpring lead ${lead.sharpspring_id}`))
+                .catch(err => console.error(`Error triggering update for SharpSpring lead ${lead.sharpspring_id}:`, err));
+        }
 
         return res.status(200).json({ message: 'Interaction logged successfully', leadId: lead.id, newScore: newScore });
 
