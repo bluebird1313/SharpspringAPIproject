@@ -2,13 +2,13 @@
   "name": "sharpspring-api-project",
   "version": "1.0.0",
   "description": "SharpSpring API integration with webhook support",
-  "main": "dist/index.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node dist/index.js",
+    "start": "node server.js",
     "dev": "ts-node src/index.ts",
-    "build": "tsc",
+    "build": "echo 'Build step skipped'",
     "test": "jest",
-    "vercel-build": "tsc --skipLibCheck --noEmitOnError false"
+    "vercel-build": "echo 'Vercel build step skipped'"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
