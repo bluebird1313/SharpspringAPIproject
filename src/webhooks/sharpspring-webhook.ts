@@ -9,6 +9,8 @@ import * as supabaseService from '../services/supabase';
 import { LeadUpsertData, SharpSpringLead, SlackAlertCreateData, Lead } from '../types';
 import { mapSharpSpringToLead } from '../utils/lead-mapper';
 import { parseAIResponse } from '../utils/parser';
+import { sendSMS } from '../services/sendSMS';
+import { sendEmail } from '../services/sendEmail';
 
 // Get Supabase credentials from environment variables
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -65,8 +67,12 @@ export async function handleSharpSpringWebhook(req: Request, res: Response) {
 /**
  * Process a lead received from a webhook
  */
-async function processWebhookLead(ssLead: SharpSpringLead) {
-  console.log('Processing webhook lead:', ssLead.id);
+async function processWebhookLead(ssLead: SharpSpringLead | any) {
+  // If Zapier sends raw fields, adjust access: const leadId = ssLead.id; const email = ssLead.emailAddress etc.
+  // For now, assume ssLead contains the lead fields directly or nested under 'lead'
+  const leadForProcessing = ssLead.lead || ssLead; // Adjust based on actual Zapier payload logging
+  const sharpSpringIdString = String(leadForProcessing.id);
+  console.log('Processing webhook lead with SS ID:', sharpSpringIdString);
   
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
     console.error('Missing Supabase credentials for webhook lead processing');
@@ -83,9 +89,6 @@ async function processWebhookLead(ssLead: SharpSpringLead) {
   });
   
   try {
-    // Convert SharpSpring ID to string
-    const sharpSpringIdString = String(ssLead.id);
-    
     // Check if lead already exists in the database
     const { data: existingLead, error: findError } = await supabase
       .from('leads')
@@ -99,10 +102,10 @@ async function processWebhookLead(ssLead: SharpSpringLead) {
     }
     
     // Map the lead data from SharpSpring format to our database format
-    const leadData: LeadUpsertData = mapSharpSpringToLead(ssLead);
+    const leadData: LeadUpsertData = mapSharpSpringToLead(leadForProcessing);
     
     // Calculate lead score
-    const score = scoringService.calculateInitialScore(ssLead);
+    const score = scoringService.calculateInitialScore(leadForProcessing);
     leadData.score = score;
     
     let savedLead: Lead | null = null;
@@ -128,19 +131,7 @@ async function processWebhookLead(ssLead: SharpSpringLead) {
       };
       
       // Update the lead in the database
-      const { data: updatedLead, error: updateError } = await supabase
-        .from('leads')
-        .update(updatePayload)
-        .eq('id', existingLead.id)
-        .select()
-        .single();
-      
-      if (updateError) {
-        console.error(`Failed to update lead with SharpSpring ID: ${sharpSpringIdString}`, updateError);
-        return;
-      }
-      
-      savedLead = updatedLead;
+      savedLead = await supabaseService.updateLead(existingLead.id, updatePayload);
       isNewLead = false;
       
       // ALWAYS send alert for updated leads processed via webhook
@@ -175,18 +166,7 @@ async function processWebhookLead(ssLead: SharpSpringLead) {
       };
       
       // Insert the new lead
-      const { data: newLead, error: createError } = await supabase
-        .from('leads')
-        .insert([createPayload])
-        .select()
-        .single();
-      
-      if (createError) {
-        console.error(`Failed to create lead with SharpSpring ID: ${sharpSpringIdString}`, createError);
-        return;
-      }
-      
-      savedLead = newLead;
+      savedLead = await supabaseService.createLead(createPayload);
       isNewLead = true;
       
       // Send notification for new lead
@@ -209,47 +189,51 @@ async function processWebhookLead(ssLead: SharpSpringLead) {
       }
     }
     
-    // --- NEW: AI Follow-up Logic --- 
-    if (savedLead) {
-      console.log(`[FollowUp] Starting AI follow-up for lead ${savedLead.email}`);
-      try {
-        const aiResponse = await openaiService.generateFollowUpMessages(savedLead);
+    if (!savedLead) {
+      console.error('Failed to save or retrieve lead from Supabase. Aborting follow-up.');
+      return; // Exit if we couldn't get the saved lead
+    }
 
-        if (aiResponse) {
-          const { sms, subject, body } = parseAIResponse(aiResponse);
+    // --- AI Follow-up Logic (Using logic from main.ts) --- 
+    console.log(`[FollowUp] Starting AI follow-up for lead ${savedLead.email}`);
+    try {
+      // Use existing openaiService function
+      const aiResponse = await openaiService.generateFollowUpMessages(savedLead); 
 
-          // Send SMS if phone number and message exist
-          if (savedLead.phone && sms) {
-            console.log(`[FollowUp] Attempting to send SMS to ${savedLead.phone}`);
-            const smsSent = await twilioService.sendSms(savedLead.phone, sms);
-            if (smsSent) {
-              await supabaseService.logOutboundMessage(savedLead.id, 'sms', sms);
-            }
-          } else {
-            console.log(`[FollowUp] Skipping SMS for ${savedLead.email} (missing phone or SMS content).`);
+      if (aiResponse) {
+        // Use existing parser utility
+        const { sms, subject, body } = parseAIResponse(aiResponse);
+
+        // Send SMS if phone number and message exist
+        if (savedLead.phone && sms) {
+          console.log(`[FollowUp] Attempting to send SMS to ${savedLead.phone}`);
+          const smsSent = await sendSMS(savedLead.phone, sms); // Use imported function
+          if (smsSent) {
+            // Use imported function (ensure it matches needed params)
+            await supabaseService.insertMessage(savedLead.id, 'sms', 'outbound', sms); 
           }
-
-          // Send Email if email address and message exist
-          if (savedLead.email && subject && body) {
-            console.log(`[FollowUp] Attempting to send Email to ${savedLead.email}`);
-            const emailSent = await sendgridService.sendEmail(savedLead.email, subject, body);
-            if (emailSent) {
-              // Log full body, maybe truncate later if needed
-              await supabaseService.logOutboundMessage(savedLead.id, 'email', `Subject: ${subject}\n\n${body}`); 
-            }
-          } else {
-            console.log(`[FollowUp] Skipping Email for ${savedLead.email} (missing email, subject, or body).`);
-          }
-
         } else {
-          console.warn(`[FollowUp] No response from OpenAI for lead ${savedLead.email}`);
+          console.log(`[FollowUp] Skipping SMS for ${savedLead.email} (missing phone or SMS content).`);
         }
-      } catch (followUpError) {
-        console.error(`[FollowUp] Error during AI follow-up for lead ${savedLead.email}:`, followUpError);
-        // Decide if this error should prevent the rest of the webhook from succeeding
+
+        // Send Email if email address and message exist
+        if (savedLead.email && subject && body) {
+          console.log(`[FollowUp] Attempting to send Email to ${savedLead.email}`);
+          const emailSent = await sendEmail(savedLead.email, subject, body); // Use imported function
+          if (emailSent) {
+            const emailLogContent = `Subject: ${subject}\n\n${body}`;
+            // Use imported function (ensure it matches needed params)
+            await supabaseService.insertMessage(savedLead.id, 'email', 'outbound', emailLogContent); 
+          }
+        } else {
+          console.log(`[FollowUp] Skipping Email for ${savedLead.email} (missing email, subject, or body).`);
+        }
+
+      } else {
+        console.warn(`[FollowUp] No response from OpenAI for lead ${savedLead.email}`);
       }
-    } else {
-       console.warn('[FollowUp] Skipping AI follow-up because lead was not saved/retrieved successfully.');
+    } catch (followUpError) {
+      console.error(`[FollowUp] Error during AI follow-up for lead ${savedLead.email}:`, followUpError);
     }
     // --- END: AI Follow-up Logic --- 
 
@@ -259,6 +243,8 @@ async function processWebhookLead(ssLead: SharpSpringLead) {
     console.error('Error processing webhook lead:', error);
   }
 }
+
+// Remove the commented-out parseAIResponse helper from here, use utils/parser.ts
 
 // --- Helper Function for Parsing AI Response --- 
 // (Could be in utils/parser.ts)

@@ -151,33 +151,28 @@ export async function addInteraction(interactionData: InteractionCreateData): Pr
 
 // --- Outbound Message Logging --- 
 
-/**
- * Logs an outbound message (SMS or Email) to the messages table.
- * Assumes a table named 'messages' exists with columns: 
- * lead_id (uuid, fk to leads), channel (text), direction (text, default 'outbound'), content (text), created_at (timestamptz, default now())
- */
-export async function logOutboundMessage(leadId: string, channel: 'sms' | 'email', content: string): Promise<boolean> {
-    if (!leadId || !channel || !content) {
-        console.error('[Supabase] Missing leadId, channel, or content for logging outbound message.');
-        return false;
+// Replace previous logOutboundMessage with insertMessage from user provided code
+export async function insertMessage(leadId: string, channel: string, direction: string, content: string): Promise<void> { // Return void as per user code
+    if (!leadId || !channel || !direction || !content) {
+        console.error('[Supabase] Missing parameters for insertMessage.');
+        // Consider throwing an error or returning indication of failure
+        return; 
     }
     const client = getSupabaseClient();
     const { error } = await client
         .from('messages') // Ensure this table name is correct
-        .insert({
-            lead_id: leadId,
-            channel: channel,
-            direction: 'outbound', // Hardcoded for this function
-            content: content
-            // created_at should be handled by DB default
+        .insert({ 
+            lead_id: leadId, 
+            channel, 
+            direction, 
+            content 
         });
 
-    if (error) {
-        console.error(`[Supabase] Error logging outbound ${channel} message for lead ${leadId}:`, error);
-        return false;
+    if (error) { 
+        console.error(`[Supabase] Error inserting ${direction} ${channel} message for lead ${leadId}:`, error);
+        throw error; // Throw error as per user code example
     }
-    console.log(`[Supabase] Successfully logged outbound ${channel} message for lead ${leadId}.`);
-    return true;
+    console.log(`[Supabase] Successfully inserted ${direction} ${channel} message for lead ${leadId}.`);
 }
 
 // --- Slack Alert Functions ---
