@@ -1,6 +1,7 @@
 /**
  * Parses the raw text response from OpenAI to extract SMS, Subject, and Body.
- * Assumes labels like "SMS:", "Email Subject:", "Email Body:" are present.
+ * Assumes labels like "SMS:", "Email Subject:", "Email Body:" are present,
+ * potentially with optional words like "Message" or "Line".
  * @param responseText The raw text from OpenAI.
  * @returns An object containing the extracted sms, subject, and body, or null if extraction fails.
  */
@@ -10,8 +11,9 @@ export function parseAIResponse(responseText: string | null): { sms: string | nu
     }
 
     // Use regex with case-insensitive and multiline flags for robustness
-    const smsMatch = responseText.match(/^SMS:(.*?)(?:Email Subject:|$)/ims);
-    const subjectMatch = responseText.match(/^Email Subject:(.*?)(?:Email Body:|$)/ims);
+    // Make " Message" and " Line" optional in the labels using (?:...)? non-capturing group
+    const smsMatch = responseText.match(/^SMS(?:\sMessage)?:(.*?)(?:Email Subject(?:\sLine)?:|$)/ims);
+    const subjectMatch = responseText.match(/^Email Subject(?:\sLine)?:(.*?)(?:Email Body:|$)/ims);
     const bodyMatch = responseText.match(/^Email Body:(.*)/ims);
 
     // Trim results and handle potential null matches
