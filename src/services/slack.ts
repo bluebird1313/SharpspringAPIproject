@@ -174,7 +174,7 @@ async function sendSlackMessage(payload: any, description: string): Promise<stri
             headers: {
                 'Content-Type': 'application/json',
             },
-            validateStatus: (status: any) => status >= 200 && status < 300,
+            validateStatus: (status: number) => status >= 200 && status < 300,
         });
 
         console.log(`Slack message sent successfully. Status: ${response.status}`);

@@ -4,7 +4,7 @@ import * as openaiService from './services/openai';
 import * as sharpSpringService from './services/sharpspring';
 import * as slackService from './services/slack';
 import * as scoringService from './services/scoring';
-import { Lead } from './types';
+import { Lead, InteractionCreateData } from './types';
 import * as dotenv from 'dotenv';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -53,12 +53,11 @@ app.post('/api/log-interaction', async (req: Request, res: Response) => {
         console.log(`AI Summary: ${aiSummary || 'Not generated'}`);
 
         // 3. Log the interaction in Supabase
-        const interactionData: any = {
+        const interactionData: InteractionCreateData = {
             lead_id: lead.id,
             type: interactionType,
             content: summary,
-            summary: summary,
-            summary_ai: aiSummary
+            summary: aiSummary,
         };
         const loggedInteraction = await supabaseService.addInteraction(interactionData);
         if (!loggedInteraction) {
@@ -70,7 +69,7 @@ app.post('/api/log-interaction', async (req: Request, res: Response) => {
         const newScore = scoringService.recalculateScoreOnInteraction(lead.score || 0, interactionType, aiSummary);
 
         // 5. Update lead score in Supabase
-        const updatedLead = await supabaseService.updateLeadScoreAndNotes(lead.id, newScore || 0, null); // Not adding notes here yet
+        const updatedLead = await supabaseService.updateLeadScoreAndNotes(lead.id, newScore || 0, null);
         if (!updatedLead) {
              console.error("Failed to update lead score in Supabase after interaction.");
              // Consider how to handle this - maybe don't update SharpSpring?

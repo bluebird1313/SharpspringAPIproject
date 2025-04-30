@@ -36,7 +36,7 @@ app.post('/webhook/sharpspring/leads', async (req, res) => {
       return res.status(400).json({ error: 'Invalid webhook payload' });
     }
 
-    const processedLeads: Lead[] = body.leads.map((lead: any) => ({
+    const processedLeads: Lead[] = body.leads.map((lead: SharpSpringLead) => ({
       sharpspring_id: lead.id?.toString() || '',
       name: `${lead.firstName || ''} ${lead.lastName || ''}`.trim(),
       email: lead.emailAddress || '',
