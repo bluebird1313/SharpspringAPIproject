@@ -139,11 +139,11 @@ export async function getLeads(options: { limit?: number; offset?: number; where
 
 /**
  * Updates leads in SharpSpring. Handles only one lead currently but uses the batch method.
- * @param leadId - The SharpSpring lead ID.
+ * @param leadId - The SharpSpring lead ID (as a string).
  * @param score - The new lead score.
  * @param notes - Notes to add separately via createNote.
  */
-export async function updateLead(leadId: number, score: number, notes?: string): Promise<boolean> {
+export async function updateLead(leadId: string, score: number, notes?: string): Promise<boolean> {
     console.log(`Attempting to update SharpSpring lead ID: ${leadId} with score: ${score}`);
 
     // *** IMPORTANT: Verify the field name for your calculated score in SharpSpring. ***
@@ -199,15 +199,15 @@ export async function updateLead(leadId: number, score: number, notes?: string):
 
 /**
  * Creates a note for a specific lead in SharpSpring.
- * @param leadId - The SharpSpring lead ID.
+ * @param leadId - The SharpSpring lead ID (as a string).
  * @param noteContent - The content of the note.
  */
-export async function createNote(leadId: number, noteContent: string): Promise<boolean> {
+export async function createNote(leadId: string, noteContent: string): Promise<boolean> {
     console.log(`Creating note for SharpSpring lead ID: ${leadId}`);
     const params = {
         objects: [
             {
-                leadID: leadId, // Ensure this field name `leadID` is correct
+                leadID: leadId,
                 note: noteContent,
             },
         ],

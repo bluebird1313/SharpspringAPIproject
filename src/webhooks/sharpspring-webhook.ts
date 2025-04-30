@@ -2,8 +2,13 @@ import { Request, Response } from 'express';
 import { createClient } from '@supabase/supabase-js';
 import * as slackService from '../services/slack';
 import * as scoringService from '../services/scoring';
+import * as openaiService from '../services/openai';
+import * as twilioService from '../services/twilio';
+import * as sendgridService from '../services/sendgrid';
+import * as supabaseService from '../services/supabase';
 import { LeadUpsertData, SharpSpringLead, SlackAlertCreateData, Lead } from '../types';
 import { mapSharpSpringToLead } from '../utils/lead-mapper';
+import { parseAIResponse } from '../utils/parser';
 
 // Get Supabase credentials from environment variables
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -41,9 +46,11 @@ export async function handleSharpSpringWebhook(req: Request, res: Response) {
     res.status(200).json({ status: 'success', message: 'Webhook received' });
     
     // Process the lead asynchronously (after sending response)
-    processWebhookLead(payload.lead).catch(error => {
-      console.error('Error processing webhook lead:', error);
-    });
+    processWebhookLead(payload.lead)
+      .then(() => console.log('Webhook processing complete.'))
+      .catch(error => {
+        console.error('Unhandled error during async webhook processing:', error);
+      });
     
   } catch (error) {
     console.error('Error handling SharpSpring webhook:', error);
@@ -99,6 +106,7 @@ async function processWebhookLead(ssLead: SharpSpringLead) {
     leadData.score = score;
     
     let savedLead: Lead | null = null;
+    let isNewLead = false;
     
     if (existingLead) {
       // This is an existing lead, update it
@@ -133,6 +141,7 @@ async function processWebhookLead(ssLead: SharpSpringLead) {
       }
       
       savedLead = updatedLead;
+      isNewLead = false;
       
       // ALWAYS send alert for updated leads processed via webhook
       if (savedLead) { 
@@ -178,6 +187,7 @@ async function processWebhookLead(ssLead: SharpSpringLead) {
       }
       
       savedLead = newLead;
+      isNewLead = true;
       
       // Send notification for new lead
       if (savedLead) {
@@ -199,9 +209,69 @@ async function processWebhookLead(ssLead: SharpSpringLead) {
       }
     }
     
-    console.log(`Webhook lead processing completed for ID: ${sharpSpringIdString}`);
+    // --- NEW: AI Follow-up Logic --- 
+    if (savedLead) {
+      console.log(`[FollowUp] Starting AI follow-up for lead ${savedLead.email}`);
+      try {
+        const aiResponse = await openaiService.generateFollowUpMessages(savedLead);
+
+        if (aiResponse) {
+          const { sms, subject, body } = parseAIResponse(aiResponse);
+
+          // Send SMS if phone number and message exist
+          if (savedLead.phone && sms) {
+            console.log(`[FollowUp] Attempting to send SMS to ${savedLead.phone}`);
+            const smsSent = await twilioService.sendSms(savedLead.phone, sms);
+            if (smsSent) {
+              await supabaseService.logOutboundMessage(savedLead.id, 'sms', sms);
+            }
+          } else {
+            console.log(`[FollowUp] Skipping SMS for ${savedLead.email} (missing phone or SMS content).`);
+          }
+
+          // Send Email if email address and message exist
+          if (savedLead.email && subject && body) {
+            console.log(`[FollowUp] Attempting to send Email to ${savedLead.email}`);
+            const emailSent = await sendgridService.sendEmail(savedLead.email, subject, body);
+            if (emailSent) {
+              // Log full body, maybe truncate later if needed
+              await supabaseService.logOutboundMessage(savedLead.id, 'email', `Subject: ${subject}\n\n${body}`); 
+            }
+          } else {
+            console.log(`[FollowUp] Skipping Email for ${savedLead.email} (missing email, subject, or body).`);
+          }
+
+        } else {
+          console.warn(`[FollowUp] No response from OpenAI for lead ${savedLead.email}`);
+        }
+      } catch (followUpError) {
+        console.error(`[FollowUp] Error during AI follow-up for lead ${savedLead.email}:`, followUpError);
+        // Decide if this error should prevent the rest of the webhook from succeeding
+      }
+    } else {
+       console.warn('[FollowUp] Skipping AI follow-up because lead was not saved/retrieved successfully.');
+    }
+    // --- END: AI Follow-up Logic --- 
+
+    console.log(`Webhook lead processing completed for SharpSpring ID: ${sharpSpringIdString}`);
     
   } catch (error) {
     console.error('Error processing webhook lead:', error);
   }
-} 
+}
+
+// --- Helper Function for Parsing AI Response --- 
+// (Could be in utils/parser.ts)
+/*
+function parseAIResponse(responseText: string): { sms: string | null; subject: string | null; body: string | null } {
+    const smsMatch = responseText.match(/SMS:(.*?)(?:Email Subject:|$)/is);
+    const subjectMatch = responseText.match(/Email Subject:(.*?)(?:Email Body:|$)/is);
+    const bodyMatch = responseText.match(/Email Body:(.*)/is);
+
+    return {
+        sms: smsMatch ? smsMatch[1].trim() : null,
+        subject: subjectMatch ? subjectMatch[1].trim() : null,
+        body: bodyMatch ? bodyMatch[1].trim() : null,
+    };
+}
+*/ 
