@@ -19,6 +19,12 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
+// Simple request logger middleware
+app.use((req, res, next) => {
+  console.log(`Incoming Request: ${req.method} ${req.originalUrl}`);
+  next(); // Pass control to the next handler
+});
+
 // Webhook endpoint for logging manual interactions (calls, SMS, etc.)
 app.post('/api/log-interaction', async (req: Request, res: Response) => {
     console.log('Received request to /api/log-interaction');
