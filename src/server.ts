@@ -89,13 +89,15 @@ app.post('/api/log-interaction', async (req: Request, res: Response) => {
             await slackService.sendLeadAlert(updatedLead, newScore);
         }
 
-        // 7. Update lead in SharpSpring (async, don't necessarily wait)
+        // 7. Update lead in SharpSpring (async, don't necessarily wait) - COMMENTED OUT
+        /*
         if (lead.sharpspring_id) {
             const noteForSharpSpring = `Interaction Logged (${interactionType}):\n${summary}\n\n${aiSummary ? 'AI Summary: ' + aiSummary + '\n' : ''}Score updated to: ${newScore}`;
-            sharpSpringService.updateLead(Number(lead.sharpspring_id), newScore, noteForSharpSpring)
+            sharpSpringService.updateLead(lead.sharpspring_id, newScore, noteForSharpSpring)
                 .then(() => console.log(`Successfully triggered update for SharpSpring lead ${lead.sharpspring_id}`))
                 .catch(err => console.error(`Error triggering update for SharpSpring lead ${lead.sharpspring_id}:`, err));
         }
+        */
 
         return res.status(200).json({ message: 'Interaction logged successfully', leadId: lead.id, newScore: newScore });
 

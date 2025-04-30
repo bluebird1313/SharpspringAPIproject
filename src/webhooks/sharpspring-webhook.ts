@@ -134,19 +134,16 @@ async function processWebhookLead(ssLead: SharpSpringLead) {
       
       savedLead = updatedLead;
       
-      // Check if the lead crossed the score threshold
-      const LEAD_SCORE_THRESHOLD = parseInt(process.env.LEAD_SCORE_THRESHOLD || '85', 10);
-      const crossedThreshold = savedLead && score >= LEAD_SCORE_THRESHOLD && originalScore < LEAD_SCORE_THRESHOLD;
-      
-      if (savedLead && crossedThreshold) {
-        console.log(`Webhook: Lead ${savedLead.email} crossed score threshold (${score}). Sending alert.`);
-        const messageTs = await slackService.sendHighScoreAlert(savedLead, score);
+      // ALWAYS send alert for updated leads processed via webhook
+      if (savedLead) { 
+        console.log(`Webhook: Lead ${savedLead.email} updated (Score: ${score}). Sending alert.`);
+        const messageTs = await slackService.sendHighScoreAlert(savedLead, score); // Using high score alert for updates
         
+        // Log the alert in Supabase
         if (messageTs || process.env.SLACK_WEBHOOK_URL) {
-          // Log the alert
           const alertData: SlackAlertCreateData = {
             lead_id: savedLead.id,
-            slack_message_ts: messageTs || 'webhook_alert',
+            slack_message_ts: messageTs || 'webhook_update_alert', // Changed description slightly
             score_at_send: score,
           };
           
