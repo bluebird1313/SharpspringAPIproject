@@ -1,4 +1,5 @@
 // Simple entry point for Vercel deployment - No TypeScript required
+// Triggering fresh commit for Vercel
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
