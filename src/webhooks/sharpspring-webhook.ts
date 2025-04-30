@@ -200,9 +200,14 @@ async function processWebhookLead(ssLead: SharpSpringLead | any) {
       // Use existing openaiService function
       const aiResponse = await openaiService.generateFollowUpMessages(savedLead); 
 
+      // *** ADD LOGGING HERE ***
+      console.log("[FollowUp] Raw AI Response Text:\n", aiResponse);
+      // *************************
+
       if (aiResponse) {
         // Use existing parser utility
         const { sms, subject, body } = parseAIResponse(aiResponse);
+        console.log(`[FollowUp] Parsed - SMS: ${sms}, Subject: ${subject}, Body: ${body}`); // Log parsed results too
 
         // Send SMS if phone number and message exist
         if (savedLead.phone && sms) {
