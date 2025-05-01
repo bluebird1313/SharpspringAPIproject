@@ -207,9 +207,10 @@ async function processWebhookLead(ssLead: SharpSpringLead | any) {
       if (aiResponse) {
         // Use existing parser utility
         const { sms, subject, body } = parseAIResponse(aiResponse);
-        console.log(`[FollowUp] Parsed - SMS: ${sms}, Subject: ${subject}, Body: ${body}`); // Log parsed results too
+        console.log(`[Parser Debug] Extracted (revised line method) - SMS: ${!!sms}, Subject: ${!!subject}, Body: ${!!body}`);
 
-        // Send SMS if phone number and message exist
+        // Send SMS if phone number and message exist - TEMPORARILY DISABLED
+        /*
         if (savedLead.phone && sms) {
           console.log(`[FollowUp] Attempting to send SMS to ${savedLead.phone}`);
           const smsSent = await sendSMS(savedLead.phone, sms); // Use imported function
@@ -220,6 +221,8 @@ async function processWebhookLead(ssLead: SharpSpringLead | any) {
         } else {
           console.log(`[FollowUp] Skipping SMS for ${savedLead.email} (missing phone or SMS content).`);
         }
+        */
+        console.log("[FollowUp] SMS sending is temporarily disabled."); // Add log message
 
         // Send Email if email address and message exist
         if (savedLead.email && subject && body) {
