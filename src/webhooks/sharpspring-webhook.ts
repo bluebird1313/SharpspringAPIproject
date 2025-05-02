@@ -37,6 +37,14 @@ export async function handleSharpSpringWebhook(req: Request, res: Response) {
     const payload = req.body;
     console.log('Webhook payload received:', JSON.stringify(payload));
     
+    // Add more detailed debugging
+    console.log('Webhook payload structure:', JSON.stringify({
+      hasLeadProperty: Boolean(payload?.lead),
+      leadPropertyType: payload?.lead ? typeof payload.lead : 'undefined',
+      leadProperties: payload?.lead ? Object.keys(payload.lead) : [],
+      rawPayload: payload
+    }));
+    
     // Validate payload has the expected structure
     if (!payload || !payload.lead) {
       console.error('Invalid payload structure, missing lead data');
@@ -67,11 +75,58 @@ export async function handleSharpSpringWebhook(req: Request, res: Response) {
 /**
  * Process a lead received from a webhook
  */
-async function processWebhookLead(ssLead: SharpSpringLead | any) {
+export async function processWebhookLead(ssLead: SharpSpringLead | any) {
   // If Zapier sends raw fields, adjust access: const leadId = ssLead.id; const email = ssLead.emailAddress etc.
   // For now, assume ssLead contains the lead fields directly or nested under 'lead'
-  const leadForProcessing = ssLead.lead || ssLead; // Adjust based on actual Zapier payload logging
-  const sharpSpringIdString = String(leadForProcessing.id);
+  let leadForProcessing = ssLead.lead || ssLead; // Adjust based on actual Zapier payload logging
+  
+  // More comprehensive debugging of the incoming lead
+  console.log('Raw webhook lead data type:', typeof ssLead);
+  console.log('Raw webhook lead structure:', JSON.stringify({
+    hasLeadProperty: Boolean(ssLead?.lead),
+    topLevelFields: Object.keys(ssLead || {}),
+    leadFieldsIfNested: ssLead?.lead ? Object.keys(ssLead.lead) : []
+  }));
+  
+  // Handle possible alternative structures (e.g., if lead is nested differently)
+  if (!leadForProcessing.id && !leadForProcessing.firstName && typeof leadForProcessing === 'object') {
+    // Try to find the lead in a different property
+    console.log('Lead object not in expected format. Attempting to find lead data in payload...');
+    
+    // Look for properties that might contain the lead
+    for (const key of Object.keys(ssLead)) {
+      const potentialLead = ssLead[key];
+      if (potentialLead && typeof potentialLead === 'object' && 
+         (potentialLead.id || potentialLead.firstName || potentialLead.emailAddress)) {
+        console.log(`Found potential lead data in property: ${key}`);
+        leadForProcessing = potentialLead;
+        break;
+      }
+    }
+  }
+  
+  // If we only have a name, create a basic lead structure with name components
+  if (
+    (typeof leadForProcessing === 'object' && Object.keys(leadForProcessing).length === 1 && leadForProcessing.name) ||
+    (typeof leadForProcessing === 'string')
+  ) {
+    console.log('Only name found in webhook payload. Creating minimal lead structure.');
+    const nameString = typeof leadForProcessing === 'string' ? leadForProcessing : leadForProcessing.name;
+    const nameParts = nameString.split(' ');
+    
+    leadForProcessing = {
+      id: `webhook-${Date.now()}`,
+      firstName: nameParts[0] || '',
+      lastName: nameParts.slice(1).join(' ') || '',
+      emailAddress: null,
+      phoneNumber: null,
+      // Other fields will be null
+    };
+    
+    console.log('Created minimal lead structure:', JSON.stringify(leadForProcessing));
+  }
+  
+  const sharpSpringIdString = String(leadForProcessing.id || `webhook-${Date.now()}`);
   console.log('Processing webhook lead with SS ID:', sharpSpringIdString);
   
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {

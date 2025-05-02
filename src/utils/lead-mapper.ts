@@ -5,6 +5,17 @@ import { LeadUpsertData, SharpSpringLead } from '../types';
  * Extracted from sync-leads.ts into a reusable utility
  */
 export function mapSharpSpringToLead(ssLead: SharpSpringLead): LeadUpsertData {
+  // Debug log the incoming lead structure
+  console.log('mapSharpSpringToLead - Input lead:', JSON.stringify({
+    id: ssLead.id,
+    firstName: ssLead.firstName,
+    lastName: ssLead.lastName,
+    email: ssLead.emailAddress,
+    phone: ssLead.phoneNumber || ssLead.mobilePhoneNumber,
+    company: ssLead.companyName,
+    availableFields: Object.keys(ssLead)
+  }));
+
   // Combine first/last name if they exist
   const name = [ssLead.firstName, ssLead.lastName].filter(Boolean).join(' ') || null;
 
@@ -27,7 +38,7 @@ export function mapSharpSpringToLead(ssLead: SharpSpringLead): LeadUpsertData {
   // Map lead source
   const initialLeadSource = ssLead.initial_lead_source_5ecff3dcb9ec7 || null;
 
-  return {
+  const mappedLead = {
     sharpspring_id: sharpSpringIdString,
     name: name,
     email: ssLead.emailAddress || null,
@@ -63,4 +74,16 @@ export function mapSharpSpringToLead(ssLead: SharpSpringLead): LeadUpsertData {
     // SharpSpring's own score
     ss_lead_score: ssLeadScore
   };
+
+  // Debug log the mapped lead
+  console.log('mapSharpSpringToLead - Mapped lead:', JSON.stringify({
+    name: mappedLead.name,
+    email: mappedLead.email,
+    phone: mappedLead.phone,
+    company: mappedLead.company_name,
+    website: mappedLead.website,
+    initialLeadSource: mappedLead.initial_lead_source
+  }));
+
+  return mappedLead;
 } 

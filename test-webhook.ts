@@ -1,75 +1,62 @@
 // Test script for the SharpSpring webhook
-import axios from 'axios';
 import * as dotenv from 'dotenv';
 dotenv.config();
 
+import { processWebhookLead } from './src/webhooks/sharpspring-webhook';
+import { initializeSupabase } from './src/services/supabase';
+
 async function testWebhook() {
-  console.log('Testing SharpSpring webhook...');
-  
-  // Create a mock SharpSpring lead payload
-  const mockLead = {
-    id: `test-${Date.now()}`,
-    firstName: 'Webhook',
-    lastName: 'Test',
-    emailAddress: `webhook.test.${Date.now()}@example.com`,
-    phoneNumber: '555-123-4567',
-    companyName: 'Webhook Test Company',
-    title: 'CTO',
-    leadScore: '30',
-    leadStatus: 'New',
-    time_frame_5eceb4e7d9474: '1-3 months',
-    initial_lead_source_5ecff3dcb9ec7: 'Webhook Test',
-    createTimestamp: new Date().toISOString(),
-    updateTimestamp: new Date().toISOString(),
-    isCustomer: '0',
-    isQualified: '1',
-    website: 'https://example.com',
-    city: 'Test City',
-    state: 'TX',
-    zipcode: '12345'
+  console.log('Testing webhook processing with sample payloads...');
+
+  // Initialize Supabase first
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.error('Missing Supabase credentials. Check your .env file.');
+    return;
+  }
+
+  // Initialize supabase service
+  initializeSupabase();
+  console.log('Supabase initialized for testing.');
+
+  // Test case 1: Name-only payload (simulating the issue)
+  const nameOnlyPayload = {
+    lead: {
+      name: 'Karli'
+    }
   };
   
-  // Prepare the payload as SharpSpring would send it
-  const webhookPayload = {
-    lead: mockLead,
-    event: 'lead.create',
-    timestamp: Date.now()
+  // Test case 2: Standard payload
+  const standardPayload = {
+    lead: {
+      id: `test-${Date.now()}`,
+      firstName: 'Test',
+      lastName: 'User',
+      emailAddress: 'test.user@example.com',
+      phoneNumber: '555-123-4567',
+      companyName: 'Test Company',
+      title: 'Manager',
+      website: 'https://example.com',
+      leadStatus: 'New'
+    }
   };
-  
-  // Get the webhook secret
-  const webhookSecret = process.env.SHARPSPRING_WEBHOOK_SECRET;
   
   try {
-    // The webhook URL
-    const webhookUrl = 'http://localhost:3000/webhooks/sharpspring';
+    console.log('\n\n======= TESTING NAME-ONLY PAYLOAD =======');
+    console.log('This simulates the issue with only a name coming through');
+    await processWebhookLead(nameOnlyPayload);
     
-    console.log('Sending webhook request to:', webhookUrl);
-    console.log('Test lead email:', mockLead.emailAddress);
+    console.log('\n\n======= TESTING STANDARD PAYLOAD =======');
+    console.log('This tests normal processing with full lead data');
+    await processWebhookLead(standardPayload);
     
-    // Send the webhook request
-    const response = await axios.post(webhookUrl, webhookPayload, {
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Webhook-Secret': webhookSecret
-      }
-    });
-    
-    console.log('Webhook response status:', response.status);
-    console.log('Webhook response data:', response.data);
-    console.log('\n✅ Webhook test completed! If your server is running, check the logs.');
-    console.log('You should also check your Slack app for a new lead notification.');
-    
+    console.log('\n\nTest completed! Check logs above for details on processing.');
   } catch (error) {
-    console.error('Error sending webhook request:');
-    if (axios.isAxiosError(error)) {
-      console.error('Status:', error.response?.status);
-      console.error('Data:', error.response?.data);
-      console.error('Message:', error.message);
-    } else {
-      console.error(error);
-    }
+    console.error('Error during test:', error);
   }
 }
+
+// Expose processWebhookLead to make it available for the test script
+export { processWebhookLead } from './src/webhooks/sharpspring-webhook';
 
 // Run the test
 testWebhook().catch(error => console.error('Unhandled error:', error)); 
